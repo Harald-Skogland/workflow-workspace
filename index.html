@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow Workspace</title>
+<style>
+:root{
+  --bg:#f2f3f5; --panel:#fff; --panel-2:#f7f8fa; --fold:#eceff3; --line:#dfe2e7; --line-2:#eceef1;
+  --text:#1c2733; --muted:#5f6b78; --faint:#8a95a1;
+  --accent:#0b5cad; --accent-bg:#e6f0fb; --accent-line:#a9c8ea;
+  --ok:#17794a; --ok-bg:#e3f4eb; --warn:#8a5a00; --warn-bg:#fff3d6; --warn-line:#e6c36a; --bad:#b3261e;
+  --synced:#5b4bb5; --synced-bg:#eeeafb;
+  --hl:#fff1b8; --r:6px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:12.5px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+.top{display:flex;align-items:center;gap:12px;padding:0 14px;height:42px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
+.crumbs{color:var(--muted);white-space:nowrap} .crumbs b{color:var(--text);font-weight:600}
+.top .sp{flex:1}
+.sel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:4px 8px;min-height:28px}
+.btn{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:4px 10px;min-height:28px}
+.btn:hover{background:var(--panel-2)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.sm{padding:1px 8px;min-height:24px;font-size:11.5px}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--panel-2);border-color:var(--line)}
+.proto{font-size:11px;color:var(--warn);background:var(--warn-bg);border-radius:10px;padding:2px 8px}
+
+.split{flex:1;display:grid;grid-template-columns:var(--lw,460px) 6px minmax(0,1fr);min-height:0}
+.split.rail{grid-template-columns:44px 0 minmax(0,1fr)}
+.left{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0;min-height:0}
+.gutter{cursor:col-resize}
+.gutter:hover,.gutter.drag{background:var(--accent-line)}
+.split.rail .gutter{display:none}
+.right{display:flex;flex-direction:column;min-width:0;min-height:0;container-type:inline-size}
+
+/* ---- left ---- */
+.phead{display:flex;align-items:center;gap:8px;height:46px;padding:0 14px;border-bottom:1px solid var(--line);flex:none;background:var(--panel)}
+.phead h2{margin:0;font-size:15px;font-weight:600;flex:1}
+.lscroll{overflow:auto;flex:1;min-height:0;padding-bottom:12px}
+.tier{padding:12px 12px 4px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);display:flex;gap:8px;align-items:center}
+.tier::after{content:"";flex:1;border-top:1px solid var(--line-2)}
+.sec{border-bottom:1px solid var(--line)}
+.sec:not(.open){background:var(--fold)}
+.sec.open{background:var(--panel);box-shadow:inset 3px 0 0 var(--accent)}
+.sec.hl>.shead{background:var(--hl)}
+.shead{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;user-select:none;width:100%;text-align:left;border:0;background:transparent}
+.sec:not(.open)>.shead:hover{background:var(--line-2)}
+.sec.open>.shead:hover{background:var(--panel-2)}
+.chev{width:10px;color:var(--muted);transition:transform .12s;flex:none}
+.sec.open .chev{transform:rotate(90deg)}
+.stitle{font-weight:600}
+.shead .tag{margin-left:auto}
+.cnt{font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:0 7px}
+.tag{font-size:10.5px;border-radius:9px;padding:1px 7px;white-space:nowrap}
+.tag.synced{background:var(--synced-bg);color:var(--synced)}
+.tag.here{background:var(--accent-bg);color:var(--accent)}
+.tag.mixed{background:var(--panel);color:var(--muted);border:1px solid var(--line)}
+.sbody{display:none;padding:4px 12px 14px 30px}
+.sec.open .sbody{display:block}
+.info{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 10px}
+.used{font-size:11.5px;color:var(--muted)} .used b{color:var(--text);font-weight:600}
+.popwrap{position:relative;display:inline-block}
+.pop{position:absolute;left:0;top:calc(100% + 4px);z-index:8;min-width:270px;max-width:340px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.2);padding:6px 0;max-height:300px;overflow:auto}
+.pop .fold{padding:4px 12px;font-weight:600;color:var(--muted);display:flex;gap:6px}
+.pop .leaf{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:transparent;padding:4px 12px 4px 30px}
+.pop .leaf:hover{background:var(--accent-bg)}
+.pop .none{padding:6px 12px;color:var(--faint)}
+.na{padding:14px 12px;color:var(--faint);font-size:11.5px}
+.na span{display:inline-block;border:1px dashed var(--line);border-radius:9px;padding:1px 8px;margin:4px 6px 0 0}
+.legend{margin:14px 12px 0;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);color:var(--muted);font-size:11px}
+
+table{border-collapse:collapse;width:100%}
+th{font-weight:600;color:var(--muted);text-align:left;font-size:11px;padding:4px 8px;border-bottom:1px solid var(--line)}
+td{padding:5px 8px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:0 0 8px}
+.tabs button{border:0;background:transparent;padding:4px 10px;color:var(--muted);border-bottom:2px solid transparent}
+.tabs button.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:0 7px;margin:2px 4px 2px 0;font-size:11.5px}
+.chip button{border:0;background:transparent;padding:0;color:var(--muted);line-height:1}
+.chip.role{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent)}
+.chip.org{background:var(--synced-bg);border-color:transparent;color:var(--synced)}
+.mod{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:9px;padding:0 6px;white-space:nowrap}
+.tree{list-style:none;margin:0;padding:0}
+.tree ul{list-style:none;margin:0;padding-left:18px}
+.tn{display:flex;align-items:center;gap:4px;padding:3px 4px;border-radius:4px;cursor:pointer}
+.tn:hover{background:var(--panel-2)} .tn.on{background:var(--accent-bg);color:var(--accent)}
+.tn i{width:12px;font-style:normal;color:var(--muted);text-align:center}
+.empty{color:var(--faint);padding:8px 2px}
+.sub{font-weight:600;margin:12px 0 6px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+input[type=text],input[type=date],input[type=number],select{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:2px 6px;min-height:26px;max-width:100%}
+.ro{color:var(--muted)}
+.card{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);margin:0 0 8px}
+.card .ch{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 8px;background:var(--panel-2);border-bottom:1px solid var(--line-2);border-radius:var(--r) var(--r) 0 0}
+.card .ch .sep{color:var(--faint)}
+.as{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--line-2)}
+.as.skip{background:color-mix(in srgb,var(--bad) 9%,transparent)}
+.as .who{flex:1 1 90px;min-width:70px}
+.as select{flex:0 0 118px;min-width:0}
+.as .who{max-width:120px}
+.card .ch select{flex:1 1 110px;min-width:0}
+.as label{white-space:nowrap}
+.as label{display:flex;gap:4px;align-items:center;color:var(--muted);font-size:11.5px}
+.addas{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 8px}
+.hier{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px}
+.hier .arrow{color:var(--faint)}
+.typechip{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--accent-line);background:var(--accent-bg);color:var(--accent);border-radius:var(--r);padding:0 2px 0 8px}
+.typechip button{border:0;background:transparent;padding:1px 4px;color:inherit}
+.typechip button:disabled{opacity:.3;cursor:default}
+.typechip.avail{background:transparent;border-style:dashed;color:var(--muted)}
+
+/* ---- right ---- */
+.rtop{padding:10px 14px 0;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
+.dtlabel{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:4px}
+.rtabs{display:flex;flex-wrap:wrap;gap:2px;overflow:visible}
+.rtab{border:1px solid transparent;border-bottom:0;background:transparent;border-radius:6px 6px 0 0;padding:6px 12px;display:flex;gap:8px;align-items:center;white-space:nowrap}
+.rtab.on{background:var(--bg);border-color:var(--line);font-weight:600;position:relative;top:1px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok)} .dot.off{background:transparent;border:1.5px solid var(--faint)}
+.rbody{flex:1;min-height:0;display:flex}
+.wflist{width:260px;flex:none;border-right:1px solid var(--line);background:var(--panel);overflow:auto}
+.wfrow{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 14px;border-bottom:1px solid var(--line-2);cursor:pointer;position:relative}
+.wfrow:hover{background:var(--panel-2)} .wfrow.on{background:var(--accent-bg)}
+.wfrow.isact .n{font-weight:600}
+.wfrow .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.act{font-variant:all-small-caps;font-weight:700;letter-spacing:.05em;color:var(--ok);font-size:12.5px}
+.menu{position:absolute;right:8px;top:100%;z-index:7;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 6px 18px rgba(0,0,0,.2);padding:4px 0;min-width:120px}
+.menu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:5px 12px}
+.menu button:hover{background:var(--panel-2)}
+.wfnew{color:var(--accent);font-weight:600}
+.sw{position:relative;width:30px;height:16px;border-radius:9px;background:var(--line);border:0;flex:none;padding:0}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:left .12s}
+.sw.on{background:var(--ok)} .sw.on::after{left:16px}
+.editor{flex:1;min-width:380px;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.escroll{flex:1;min-height:0;overflow:auto;padding:12px 14px 20px}
+.ehead{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px}
+.ehead input[type=text]{font-size:14px;font-weight:600;min-width:200px;flex:1}
+.opts{display:flex;flex-wrap:wrap;gap:6px 18px;margin:4px 0 10px;color:var(--muted)}
+.opts label{display:flex;gap:5px;align-items:center}
+.sim{border:1px solid var(--accent-line);background:var(--accent-bg);border-radius:var(--r);padding:6px 10px;margin-bottom:12px}
+.sim summary{cursor:pointer;color:var(--accent);font-weight:600}
+.simgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:8px}
+.simgrid label{display:flex;flex-direction:column;gap:2px;color:var(--muted);font-size:11px}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);margin-bottom:12px}
+.step>.sh{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line-2)}
+.step>.sh input[type=text]{font-weight:600}
+.rule{margin:8px 10px;padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--panel-2)}
+.rule.hl{outline:2px solid var(--hl);background:color-mix(in srgb,var(--hl) 40%,var(--panel-2))}
+.rline{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.rline .lbl{color:var(--muted)}
+.rsrc{color:var(--accent);background:none;border:0;padding:0;text-decoration:underline;font-size:11.5px}
+.sflags{display:flex;flex-wrap:wrap;gap:6px 18px;padding:8px 10px;color:var(--muted);border-top:1px solid var(--line-2)}
+.sflags label{display:flex;gap:5px;align-items:center}
+.savebar{flex:none;display:flex;gap:8px;align-items:center;justify-content:flex-end;padding:8px 14px;background:var(--panel);border-top:1px solid var(--line)}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:6px 12px;border-radius:var(--r);opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+.toast.show{opacity:1}
+.empty-state{padding:40px;color:var(--muted);text-align:center}
+@container (max-width:640px){.rbody{flex-direction:column}.wflist{width:100%;max-height:190px;border-right:0;border-bottom:1px solid var(--line)}.editor{min-width:0}}
+@media (max-width:820px){
+  .split{grid-template-columns:44px 0 minmax(0,1fr)}
+  .split .gutter{display:none}
+  .split:not(.rail) .left{position:fixed;left:0;top:42px;bottom:0;width:min(92vw,440px);z-index:5;box-shadow:4px 0 16px rgba(0,0,0,.25)}
+  .split:not(.rail){grid-template-columns:0 0 minmax(0,1fr)}
+}
+.rail-v{display:none}
+.split.rail .left>:not(.rail-v){display:none}
+.split.rail .rail-v{display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px 0}
+.rail-v .vt{writing-mode:vertical-rl;color:var(--muted);font-weight:600;letter-spacing:.04em}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <button class="btn ghost" id="burger" aria-label="Toggle definitions panel" title="Toggle definitions panel">☰</button>
+  <div class="crumbs">Services / Configuration / <b>Workflow workspace</b></div>
+  <span class="proto">Prototype — all data is made-up test data</span>
+  <div class="sp"></div>
+  <label class="sr" for="company">Company</label>
+  <select class="sel" id="company"></select>
+</div>
+
+<div class="split" id="split">
+  <aside class="left" id="left" aria-label="Definitions">
+    <div class="rail-v"><button class="btn sm" data-act="rail" title="Open definitions panel">»</button><span class="vt">Definitions</span></div>
+    <div class="phead">
+      <h2>Definitions</h2>
+      <button class="btn sm" data-act="expandAll">Expand all</button>
+      <button class="btn sm" data-act="collapseAll">Collapse all</button>
+      <button class="btn sm ghost" data-act="rail" title="Collapse panel to a rail">«</button>
+    </div>
+    <div class="lscroll" id="lscroll"></div>
+  </aside>
+  <div class="gutter" id="gutter" role="separator" aria-orientation="vertical" aria-label="Resize panels" tabindex="0"></div>
+  <main class="right" id="right"></main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= Test data (made up) ================= */
+const ORG_ROLES = ['Attestant','Anviser','Enhetsleder','IA-ansvarlig'];
+const ROLES = ['Budget owner','Unit manager','Finance controller','Executive approver','Project owner','Project controller'];
+const H=(role,who,dep)=>({role,who,dep:!!dep});
+const ORG_TREE = [
+  {id:'100',n:'Chief administrative office',h:[H('Enhetsleder','Per Kristoffersen'),H('Anviser','Ingrid Solberg')],kids:[
+    {id:'101',n:'Finance',h:[H('Enhetsleder','Nina Strand'),H('Attestant','Henrik Aas'),H('Attestant','Sofie Dahl',true)]},
+    {id:'102',n:'HR and payroll',h:[H('Enhetsleder','Kari Nygård'),H('IA-ansvarlig','Elin Moe')]}]},
+  {id:'200',n:'Education',h:[H('Enhetsleder','Maria Lindqvist')],kids:[
+    {id:'201',n:'Kindergartens',h:[H('Enhetsleder','Elin Moe'),H('Attestant','Lars Vik'),H('Anviser','Jonas Berg')]},
+    {id:'202',n:'Primary schools',h:[H('Enhetsleder','Tor Haugen'),H('Attestant','Omar Haddad')]},
+    {id:'203',n:'Lower secondary schools',h:[H('Enhetsleder','Sofie Dahl'),H('Attestant','Lars Vik',true)]}]},
+  {id:'300',n:'Health and care',h:[H('Enhetsleder','Omar Haddad')],kids:[
+    {id:'301',n:'Home care',h:[H('Enhetsleder','Kari Nygård'),H('Attestant','Jonas Berg')]},
+    {id:'302',n:'Nursing homes',h:[H('Enhetsleder','Nina Strand'),H('IA-ansvarlig','Maria Lindqvist')]}]},
+  {id:'400',n:'Community development',h:[H('Enhetsleder','Tor Haugen')],kids:[
+    {id:'401',n:'Planning and building',h:[H('Enhetsleder','Henrik Aas'),H('Anviser','Per Kristoffersen')]},
+    {id:'402',n:'Roads and parks',h:[H('Enhetsleder','Lars Vik')]}]},
+  {id:'500',n:'Culture and leisure',h:[H('Enhetsleder','Sofie Dahl')]}
+];
+const MANAGERS = [['Aksel Bakke','Elin Moe'],['Bjørg Lund','Elin Moe'],['Camilla Roe','Tor Haugen'],['Daniel Fjeld','Tor Haugen'],['Eva Hagen','Kari Nygård'],['Frode Sand','Kari Nygård'],['Guro Myhre','Nina Strand'],['Hans Ruud','Nina Strand'],['Ida Kvam','Omar Haddad'],['Jon Eide','Omar Haddad'],['Kine Aune','Henrik Aas'],['Leif Brekke','Lars Vik'],['Mona Skau','Sofie Dahl'],['Nils Foss','Sofie Dahl']];
+const DEPTS = [['Administration','10'],['Finance','20'],['Kindergartens','30'],['Primary schools','40'],['Home care','50'],['Nursing homes','60'],['Planning and building','70'],['Roads and parks','80']];
+const DEPT_APP = {'10':['Ingrid Solberg'],'20':['Nina Strand','Henrik Aas'],'30':['Elin Moe'],'40':['Tor Haugen'],'50':['Kari Nygård'],'60':['Omar Haddad','Maria Lindqvist'],'70':['Henrik Aas'],'80':['Lars Vik']};
+const CU_VALS = {'Ansvar (1)':['1100 Administration','2010 Kindergartens','2020 Primary schools','3010 Home care','3020 Nursing homes','4010 Planning'],
+  'Tjeneste (2)':['120 Administration','201 Kindergarten','202 Primary education','254 Care services','332 Planning'],
+  'Prosjekt (3)':['P-1001 New school west','P-1002 Swimming hall','P-1003 Road resurfacing']};
+const PR_TYPES=['Project','Phase'];
+const PR_VALS={Project:['P-1001 New school west','P-1002 Swimming hall','P-1003 Road resurfacing'],Phase:['Planning','Construction','Handover']};
+const LIMITS=['Small (NOK 5 000)','Medium (NOK 25 000)','Large (NOK 100 000)'];
+
+const COMPANIES = {
+  'Fjordvik Kommune':{avail:['orgchart','managers','departments','roles','costunits','projects'], docs:['Expense claims','Leave requests','Timesheets','Invoices','Purchase orders','Vouchers','Information']},
+  'Nordlys Energi AS':{avail:['managers','departments','roles','costunits','projects'], docs:['Expense claims','Timesheets','Invoices']},
+  'Havbris Sjømat AS':{avail:['departments','roles','costunits'], docs:['Expense claims','Invoices']},
+  'Bergvik Bygg AS':{avail:['managers','departments','roles','costunits','projects'], docs:['Expense claims','Timesheets','Invoices']},
+  'Skogli Handel AS':{avail:['orgchart','managers','roles','costunits'], docs:['Expense claims','Leave requests','Invoices']}
+};
+const SECTIONS = [
+  {id:'orgchart',   tier:1, title:'Organisation chart', src:'synced', usedFor:'Organisation unit role', rules:['orgrole'], relies:null},
+  {id:'managers',   tier:1, title:'Managers',           src:'synced', usedFor:'Nearest manager',        rules:['manager'], relies:null},
+  {id:'departments',tier:1, title:'Departments',        src:'mixed',  usedFor:'Department manager',     rules:['dept'],    relies:null},
+  {id:'roles',      tier:1, title:'Cost unit roles · Project unit roles', src:'here', usedFor:'Cost unit role · Project unit role', rules:['costrole','projrole'], relies:null},
+  {id:'costunits',  tier:2, title:'Cost units',         src:'mixed',  usedFor:'Cost unit role',         rules:['costrole'], relies:'Cost unit roles'},
+  {id:'projects',   tier:2, title:'Projects',           src:'mixed',  usedFor:'Project unit role',      rules:['projrole'], relies:'Project unit roles'}
+];
+const SRC_LABEL={synced:'Synced · read-only',here:'Defined here',mixed:'Synced + assigned here'};
+const RULE={list:'this list of approvers…',costrole:'any approver with this cost unit role…',orgrole:'any approver with this organisation unit role…',manager:'the nearest manager',dept:'the department manager',projmgr:'the project manager',projrole:'any approver with this project unit role…'};
+const RULE_NEEDS={list:null,costrole:'costunits',orgrole:'orgchart',manager:'managers',dept:'departments',projmgr:'projects',projrole:'projects'};
+const RULE_SRC={costrole:'costunits',orgrole:'orgchart',manager:'managers',dept:'departments',projrole:'projects'};
+
+/* ================= Example workflows ================= */
+let wfId=1;
+const R=(type,o)=>Object.assign({type,role:'',approvers:[],auto:false,amount:false,exceptions:[]},o||{});
+const L=(names,o)=>R('list',Object.assign({approvers:names},o||{}));
+const COND=(mode,limit)=>({on:true,mode,limit});
+const ST=(name,rules,o)=>Object.assign({name,cond:{on:false,mode:'Below the limit',limit:LIMITS[0]},rules:Array.isArray(rules)?rules:[rules],lines:false,block:true,allowEdit:false,reapprove:'Never'},o||{});
+const mk=(name,doc,active,steps,o)=>Object.assign({id:wfId++,name,doc,active,fourEyes:false,initial:false,steps},o||{});
+const WF=[
+ mk('Standard expense claim','Expense claims',true,[
+   ST('Nearest manager',R('manager'),{allowEdit:true,reapprove:'Ask the approver'}),
+   ST('Budget owner',R('costrole',{role:'Budget owner'}),{cond:COND('Above the limit',LIMITS[0])}),
+   ST('Finance review',R('costrole',{role:'Finance controller'}),{cond:COND('Above the limit',LIMITS[1])}),
+   ST('Executive sign-off',L(['Ingrid Solberg']),{cond:COND('Above the limit',LIMITS[2])})],{fourEyes:true}),
+ mk('Project expense claim','Expense claims',false,[
+   ST('Project manager',R('projmgr')),
+   ST('Project owner',R('projrole',{role:'Project owner'})),
+   ST('Project controller',R('projrole',{role:'Project controller'}),{cond:COND('Above the limit',LIMITS[0])}),
+   ST('Finance review',R('costrole',{role:'Finance controller'}),{cond:COND('Above the limit',LIMITS[1])})]),
+ mk('Expense claim – by organisation unit','Expense claims',false,[
+   ST('Unit head',R('orgrole',{role:'Enhetsleder'})),
+   ST('Attestation',R('orgrole',{role:'Attestant'}),{cond:COND('Above the limit',LIMITS[0])}),
+   ST('Finance review',R('costrole',{role:'Finance controller'}),{cond:COND('Above the limit',LIMITS[1])})]),
+ mk('Travel claim (draft)','Expense claims',false,[
+   ST('Nearest manager',R('manager')),
+   ST('Department manager',R('dept')),
+   ST('Finance review',[R('costrole',{role:'Finance controller',amount:true}),L(['Nina Strand'],{amount:true,auto:true})],{cond:COND('Above the limit',LIMITS[0])})]),
+ mk('Leave – manager and HR','Leave requests',true,[
+   ST('Nearest manager',R('manager')),
+   ST('Unit head',R('orgrole',{role:'Enhetsleder'})),
+   ST('HR registration',L(['Kari Nygård'],{exceptions:[{req:'Kari Nygård',who:'Per Kristoffersen'}]}))]),
+ mk('Leave – department sign-off','Leave requests',false,[
+   ST('Department manager',R('dept')),
+   ST('Nearest manager',R('manager'),{cond:COND('Below the limit',LIMITS[0])}),
+   ST('HR registration',L(['Kari Nygård']))]),
+ mk('Timesheet – project','Timesheets',true,[
+   ST('Project manager',R('projmgr')),
+   ST('Project owner',R('projrole',{role:'Project owner'})),
+   ST('Unit manager',R('costrole',{role:'Unit manager'})),
+   ST('Department manager',R('dept'),{cond:COND('Above the limit',LIMITS[1])})]),
+ mk('Timesheet – simple','Timesheets',false,[
+   ST('Nearest manager',R('manager')),
+   ST('Department manager',R('dept')),
+   ST('Payroll',L(['Kari Nygård']))]),
+ mk('Invoice – cost unit sign-off','Invoices',true,[
+   ST('Initial check',L(['Lars Vik','Sofie Dahl'])),
+   ST('Budget owner',R('costrole',{role:'Budget owner'}),{lines:true,allowEdit:true,reapprove:'Ask the approver'}),
+   ST('Unit manager',R('costrole',{role:'Unit manager'}),{cond:COND('Above the limit',LIMITS[0])}),
+   ST('Finance review',[R('costrole',{role:'Finance controller'}),R('dept',{amount:true})],{cond:COND('Above the limit',LIMITS[1])}),
+   ST('Executive sign-off',R('costrole',{role:'Executive approver'}),{cond:COND('Above the limit',LIMITS[2])}),
+   ST('Project check',R('projrole',{role:'Project controller'}),{cond:COND('Above the limit',LIMITS[1])})],{fourEyes:true,initial:true}),
+ mk('Invoice – by department','Invoices',false,[
+   ST('Department manager',R('dept')),
+   ST('Attestation',R('orgrole',{role:'Attestant'})),
+   ST('Finance review',R('costrole',{role:'Finance controller'}),{cond:COND('Above the limit',LIMITS[1])})]),
+ mk('Invoice – by organisation (new)','Invoices',false,[
+   ST('Attestation',R('orgrole',{role:'Attestant'})),
+   ST('Sign-off',R('orgrole',{role:'Anviser'})),
+   ST('Unit head',R('orgrole',{role:'Enhetsleder'}),{cond:COND('Above the limit',LIMITS[0])}),
+   ST('Nearest manager',R('manager'),{cond:COND('Above the limit',LIMITS[1])}),
+   ST('Finance review',R('costrole',{role:'Finance controller'}),{cond:COND('Above the limit',LIMITS[2])})]),
+ mk('Purchase order – standard','Purchase orders',true,[
+   ST('Requester check',L(['Lars Vik'])),
+   ST('Budget owner',R('costrole',{role:'Budget owner'}),{lines:true}),
+   ST('Department manager',R('dept'),{cond:COND('Above the limit',LIMITS[0])}),
+   ST('Finance review',R('costrole',{role:'Finance controller'}),{cond:COND('Above the limit',LIMITS[1])}),
+   ST('Executive sign-off',R('costrole',{role:'Executive approver'}),{cond:COND('Above the limit',LIMITS[2])})]),
+ mk('Purchase order – project','Purchase orders',false,[
+   ST('Project manager',R('projmgr')),
+   ST('Project owner',R('projrole',{role:'Project owner'})),
+   ST('Project controller',R('projrole',{role:'Project controller'}),{cond:COND('Above the limit',LIMITS[1])})]),
+ mk('Voucher – accounting review','Vouchers',true,[
+   ST('Unit manager',R('costrole',{role:'Unit manager'})),
+   ST('Finance review',R('costrole',{role:'Finance controller'}),{cond:COND('Above the limit',LIMITS[0])}),
+   ST('Attestation',R('orgrole',{role:'Attestant'}),{cond:COND('Above the limit',LIMITS[1])}),
+   ST('Executive sign-off',L(['Ingrid Solberg']),{cond:COND('Above the limit',LIMITS[2])})]),
+ mk('Voucher – by manager','Vouchers',false,[
+   ST('Nearest manager',R('manager')),
+   ST('Department manager',R('dept')),
+   ST('Finance review',R('costrole',{role:'Finance controller'}))]),
+ mk('Information – supplier changes','Information',true,[
+   ST('Purchasing check',L(['Lars Vik','Sofie Dahl'])),
+   ST('Unit head',R('orgrole',{role:'Enhetsleder'})),
+   ST('Finance review',R('costrole',{role:'Finance controller'}))])
+];
+const wfNeeds=w=>{const s=new Set();w.steps.forEach(st=>st.rules.forEach(r=>{const n=RULE_NEEDS[r.type];if(n)s.add(n);if(r.type==='costrole'||r.type==='projrole')s.add('roles')}));return [...s]};
+const wfTypes=w=>{const s=new Set();w.steps.forEach(st=>st.rules.forEach(r=>s.add(r.type)));return s};
+
+/* ================= Left-panel data (editable in place) ================= */
+const CU={selected:['Ansvar (1)','Tjeneste (2)'],available:['Prosjekt (3)'],
+ combos:[
+  {v:{'Ansvar (1)':'1100 Administration','Tjeneste (2)':'Any'},as:[{role:'Budget owner',who:'Henrik Aas',dep:false,skip:false},{role:'Unit manager',who:'Ingrid Solberg',dep:false,skip:false}]},
+  {v:{'Ansvar (1)':'2010 Kindergartens','Tjeneste (2)':'201 Kindergarten'},as:[{role:'Budget owner',who:'Sofie Dahl',dep:false,skip:false}]},
+  {v:{'Ansvar (1)':'2010 Kindergartens','Tjeneste (2)':'Any'},as:[{role:'Budget owner',who:'Lars Vik',dep:false,skip:false},{role:'Unit manager',who:'Elin Moe',dep:false,skip:false}]},
+  {v:{'Ansvar (1)':'3010 Home care','Tjeneste (2)':'Any'},as:[{role:'Unit manager',who:'Kari Nygård',dep:false,skip:false},{role:'Budget owner',who:'Omar Haddad',dep:false,skip:false},{role:'Finance controller',who:'Nina Strand',dep:true,skip:false}]},
+  {v:{'Ansvar (1)':'Any','Tjeneste (2)':'120 Administration'},as:[{role:'Finance controller',who:'Nina Strand',dep:false,skip:false},{role:'Unit manager',who:'',dep:false,skip:true},{role:'Executive approver',who:'Tor Haugen',dep:false,skip:false}]}
+ ],
+ exc:[{req:'Jonas Berg',role:'Budget owner',who:'Maria Lindqvist'},{req:'Sofie Dahl',role:'Unit manager',who:'Ingrid Solberg'}]};
+const PR={rows:[
+  {v:{Project:'P-1001 New school west',Phase:'Any'},role:'Project owner',who:['Tor Haugen']},
+  {v:{Project:'P-1001 New school west',Phase:'Construction'},role:'Project controller',who:['Nina Strand','Henrik Aas']},
+  {v:{Project:'P-1002 Swimming hall',Phase:'Any'},role:'Project owner',who:['Maria Lindqvist']},
+  {v:{Project:'Any',Phase:'Any'},role:'Project controller',who:['Henrik Aas']}],draft:null};
+const DEPAPP=JSON.parse(JSON.stringify(DEPT_APP));
+const ROLES_LIVE=ROLES.slice();
+
+/* ================= State ================= */
+const S={company:'Fjordvik Kommune',open:new Set(['orgchart','costunits']),doc:'Expense claims',sel:null,draft:null,dirty:false,hlRule:null,hlSec:null,pop:null,menu:null,
+  mtab:'emp',orgSel:'101',orgOpen:new Set(['100','200']),orgF:{role:'',q:'',dep:''},q:{managers:'',departments:''}};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const comp=()=>COMPANIES[S.company];
+const avail=id=>comp().avail.includes(id);
+const clone=o=>JSON.parse(JSON.stringify(o));
+try{const o=JSON.parse(localStorage.getItem('aw.open2')||'null');if(o)S.open=new Set(o)}catch(e){}
+const persist=()=>{try{localStorage.setItem('aw.open2',JSON.stringify([...S.open]))}catch(e){}};
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2800)}
+const visibleWf=()=>WF.filter(w=>comp().docs.includes(w.doc)&&wfNeeds(w).every(avail));
+const wfsOf=doc=>visibleWf().filter(w=>w.doc===doc);
+const activeOf=doc=>wfsOf(doc).find(w=>w.active);
+const usesSection=(w,sec)=>{const t=wfTypes(w);return sec.rules.some(r=>t.has(r))};
+const sel=(opts,val,attrs,ph)=>`<select ${attrs}>${ph?`<option value="">${ph}</option>`:''}${opts.map(o=>`<option ${o===val?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
+const findOrg=(list,id)=>{for(const u of list){if(u.id===id)return u;if(u.kids){const r=findOrg(u.kids,id);if(r)return r}}return null};
+const roleUses=(role,types)=>visibleWf().filter(w=>w.steps.some(s=>s.rules.some(r=>types.includes(r.type)&&r.role===role))).length;
+
+/* ================= Left panel ================= */
+function infoRow(s){
+  const ws=visibleWf().filter(w=>usesSection(w,s));
+  const open=S.pop===s.id;
+  const byDoc={};ws.forEach(w=>(byDoc[w.doc]=byDoc[w.doc]||[]).push(w));
+  const tree=Object.keys(byDoc).length?Object.keys(byDoc).map(d=>`<div class="fold">📁 ${d} <span class="ro">(${byDoc[d].length})</span></div>${byDoc[d].map(w=>`<button class="leaf" data-act="popgo" data-id="${w.id}" data-sec="${s.id}"><span>${esc(w.name)}</span>${w.active?'<span class="act">Active</span>':''}</button>`).join('')}`).join(''):'<div class="none">No workflow uses this yet.</div>';
+  return `<div class="info"><span class="used">Used for: <b>${s.usedFor}</b></span>
+    <span class="popwrap"><button class="btn sm" data-act="pop" data-id="${s.id}" aria-expanded="${open}">Used in ${ws.length} workflow${ws.length===1?'':'s'} ▾</button>${open?`<div class="pop" role="menu">${tree}</div>`:''}</span>
+    ${s.relies?`<span class="used">Relies on: <b>${s.relies}</b></span>`:''}</div>`;
+}
+function orgTable(){
+  const u=findOrg(ORG_TREE,S.orgSel);if(!u)return '';
+  const f=S.orgF;
+  const rows=(u.h||[]).filter(h=>(!f.role||h.role===f.role)&&(!f.q||h.who.toLowerCase().includes(f.q.toLowerCase()))&&(!f.dep||(f.dep==='yes')===h.dep));
+  return `<table><tr><th>Organisation unit role</th><th>Holder</th><th>Deputy</th></tr>${rows.map(h=>`<tr><td><span class="chip org">${h.role}</span></td><td>${h.who}</td><td>${h.dep?'<span class="mod" title="Deputy only receives documents the other approvers cannot approve">◐ Deputy</span>':'<span class="ro">–</span>'}</td></tr>`).join('')}</table>${rows.length?'':'<div class="empty">There are no approvers for this organisation unit.</div>'}`;
+}
+function mgrTable(){
+  const q=S.q.managers.toLowerCase(), emp=S.mtab==='emp';
+  const rows=MANAGERS.map(([e,m])=>emp?[e,m]:[m,e]).filter(r=>!q||r.join(' ').toLowerCase().includes(q)).sort();
+  return `<table><tr><th>${emp?'Employee':'Manager'}</th><th>${emp?'Manager':'Employee'}</th></tr>${rows.map(r=>`<tr><td>${r[0]}</td><td class="ro">${r[1]}</td></tr>`).join('')}</table>`;
+}
+function deptTable(){
+  const q=S.q.departments.toLowerCase();
+  const rows=DEPTS.filter(d=>!q||(d[0]+' '+DEPAPP[d[1]].join(' ')).toLowerCase().includes(q));
+  return `<table><tr><th>Department</th><th>ID</th><th>Department approver(s)</th></tr>${rows.map(d=>`<tr><td class="ro">${d[0]}</td><td class="ro">${d[1]}</td><td>${DEPAPP[d[1]].map((a,i)=>`<span class="chip">${a}<button data-act="dRm" data-d="${d[1]}" data-i="${i}" aria-label="Remove ${a}">×</button></span>`).join('')}<input type="text" placeholder="+ add" data-act="dAdd" data-d="${d[1]}" style="width:70px"></td></tr>`).join('')}</table>`;
+}
+function cuHtml(){
+  const hier=CU.selected.map((t,i)=>`<span class="typechip">${i+1} ${t}<button data-act="cuMove" data-t="${t}" data-d="-1" title="Move up in hierarchy" ${i===0?'disabled':''}>◀</button><button data-act="cuMove" data-t="${t}" data-d="1" title="Move down" ${i===CU.selected.length-1?'disabled':''}>▶</button><button data-act="cuDel" data-t="${t}" title="Remove type">×</button></span>`).join('<span class="arrow">›</span>');
+  const av=CU.available.map(t=>`<span class="typechip avail">${t}<button data-act="cuAdd" data-t="${t}" title="Use this cost unit type">+</button></span>`).join('');
+  const val=(c,t)=>c.v[t]||'Any';
+  const combos=CU.combos.map((c,i)=>`<div class="card"><div class="ch">${CU.selected.map(t=>sel(['Any',...CU_VALS[t]],val(c,t),`data-act="cmbVal" data-i="${i}" data-t="${esc(t)}" aria-label="${t}"`)).join('<span class="sep">›</span>')}<span style="flex:1"></span><button class="btn sm ghost" data-act="cmbDel" data-i="${i}" title="Delete combination">🗑</button></div>
+    ${c.as.map((a,j)=>`<div class="as ${a.skip?'skip':''}">${sel(ROLES_LIVE,a.role,`data-act="asRole" data-i="${i}" data-j="${j}" aria-label="Cost unit role"`)}
+      ${a.skip?'<span class="who ro">(skipped)</span>':`<input class="who" type="text" value="${esc(a.who)}" placeholder="Approver" data-act="asWho" data-i="${i}" data-j="${j}">`}
+      <label><input type="checkbox" data-act="asSkip" data-i="${i}" data-j="${j}" ${a.skip?'checked':''}> Skip</label>
+      <label title="Deputy only receives documents the other approvers cannot approve"><input type="checkbox" data-act="asDep" data-i="${i}" data-j="${j}" ${a.dep?'checked':''}> ${a.dep?'<span class="mod">◐ Deputy</span>':'Deputy'}</label>
+      <span style="flex:1"></span><button class="btn sm ghost" data-act="asDel" data-i="${i}" data-j="${j}" title="Remove approver">×</button></div>`).join('')}
+    <div class="addas"><button class="btn sm" data-act="asNew" data-i="${i}">+ Assign approver</button></div></div>`).join('');
+  const exc=CU.exc.map((e,i)=>`<tr><td>${e.req}</td><td><span class="chip role">${e.role}</span></td><td>${e.who}</td><td><span class="mod">◐ Exception</span></td><td style="text-align:right"><button class="btn sm ghost" data-act="excDel" data-i="${i}">×</button></td></tr>`).join('');
+  return `<div class="sub" style="margin-top:0">Hierarchy <span class="ro" style="font-weight:400">— order decides precedence</span></div><div class="hier">${hier}</div><div class="hier">${av?'<span class="ro">Available:</span>'+av:''}</div>
+    <div class="sub">Combinations and approvers <span class="ro" style="font-weight:400">— “Any” matches every cost unit not otherwise specified</span></div>${combos}
+    <button class="btn sm" data-act="cmbNew">+ Add cost unit combination</button>
+    <div class="sub">Exceptions per employee <span class="ro" style="font-weight:400">— override the approvers above</span></div>
+    <table><tr><th>Requester</th><th>Cost unit role</th><th>Approver</th><th></th><th></th></tr>${exc}</table>
+    <div class="row" style="margin-top:6px"><input type="text" placeholder="Requester" id="excReq" style="width:110px">${sel(ROLES_LIVE,'', 'id="excRole"','Cost unit role')}<input type="text" placeholder="Approver" id="excWho" style="width:110px"><button class="btn sm" data-act="excAdd">+ Add new exception</button></div>`;
+}
+function prHtml(){
+  const rowH=(r,i,isNew)=>`<div class="card"><div class="ch">${PR_TYPES.map(t=>sel(['Any',...PR_VALS[t]],r.v[t]||'',`data-act="prVal" data-i="${i}" data-t="${t}" aria-label="${t}"`,isNew?`${t}…`:'')).join('<span class="sep">›</span>')}<span style="flex:1"></span>
+      ${isNew?`<button class="btn sm primary" data-act="prSave" ${PR.draft&&PR.draft.role&&PR.draft.who.length&&PR_TYPES.every(t=>PR.draft.v[t])?'':'disabled'}>Save</button><button class="btn sm" data-act="prCancel">Cancel</button>`:`<button class="btn sm ghost" data-act="prDel" data-i="${i}" title="Delete row">🗑</button>`}</div>
+    <div class="as">${sel(ROLES_LIVE,r.role,`data-act="prRole" data-i="${i}" aria-label="Project unit role"`,isNew?'Project unit role…':'')}
+      <span style="flex:1 1 140px">${r.who.map((a,k)=>`<span class="chip">${a}<button data-act="prRm" data-i="${i}" data-k="${k}" aria-label="Remove ${a}">×</button></span>`).join('')}<input type="text" placeholder="+ approver, Enter" data-act="prAdd" data-i="${i}" style="width:110px"></span></div></div>`;
+  return `${PR.rows.map((r,i)=>rowH(r,i,false)).join('')}${PR.draft?rowH(PR.draft,-1,true):''}
+    <div style="margin-top:8px"><button class="btn sm" data-act="prNew" ${PR.draft?'disabled':''}>+ Add row</button></div>
+    <div class="info" style="margin:8px 0 0"><span class="used">“Any” lets the approver approve all documents for that project unit type. Save is available when all fields in a new row are filled.</span></div>`;
+}
+function rolesHtml(){
+  return `<table><tr><th>Role</th><th>Used as</th><th></th></tr>${ROLES_LIVE.map(r=>{const c=roleUses(r,['costrole']),p=roleUses(r,['projrole']);
+   return `<tr><td><span class="chip role">${r}</span></td><td class="ro">${c?`Cost unit role · ${c} wf<br>`:''}${p?`Project unit role · ${p} wf`:''}${!c&&!p?'Not used in a workflow':''}</td><td style="text-align:right;white-space:nowrap"><button class="btn sm ghost" data-act="roleDel" data-r="${esc(r)}" title="Delete (also deletes its assignments and rules)">🗑</button></td></tr>`}).join('')}</table>
+   <div class="row" style="margin-top:8px"><input type="text" id="newRole" placeholder="New role name" style="width:150px"><button class="btn sm" data-act="roleAdd">+ Add role</button></div>
+   <div class="info" style="margin:8px 0 0"><span class="used">One shared list: the same role name can be picked as a cost unit role (Cost units) or a project unit role (Projects).</span></div>`;
+}
+function secBody(id){
+  if(id==='orgchart'){
+    const tree=list=>`<ul>${list.map(u=>{const has=u.kids&&u.kids.length,o=S.orgOpen.has(u.id);
+      return `<li><div class="tn ${S.orgSel===u.id?'on':''}" data-act="orgsel" data-id="${u.id}"><i data-act="orgtog" data-id="${u.id}">${has?(o?'▾':'▸'):''}</i>${u.id} - ${u.n}</div>${has&&o?tree(u.kids):''}</li>`}).join('')}</ul>`;
+    const u=findOrg(ORG_TREE,S.orgSel);
+    return `<div class="info"><span class="used">As of <input type="date" value="2026-10-21" aria-label="Inspect as of"></span></div>
+      <div class="tree">${tree(ORG_TREE)}</div>
+      <div class="sub">${u?u.id+' - '+u.n:''}</div>
+      <div class="row" style="margin-bottom:6px">${sel(ORG_ROLES,S.orgF.role,'data-act="orgF" data-k="role" aria-label="Filter by organisation unit role"','All organisation unit roles')}
+        <input type="text" placeholder="Search holder…" data-act="orgQ" value="${esc(S.orgF.q)}" style="width:130px">
+        <select data-act="orgF" data-k="dep" aria-label="Filter by deputy"><option value="">Deputy: all</option><option value="yes" ${S.orgF.dep==='yes'?'selected':''}>Deputy: yes</option><option value="no" ${S.orgF.dep==='no'?'selected':''}>Deputy: no</option></select></div>
+      <div id="tbl-orgchart">${orgTable()}</div>`;
+  }
+  if(id==='managers') return `<div class="tabs"><button class="${S.mtab==='emp'?'on':''}" data-act="mtab" data-v="emp">Manager by employee</button><button class="${S.mtab==='mgr'?'on':''}" data-act="mtab" data-v="mgr">Employee by manager</button></div>
+      <input type="text" placeholder="Search employee or manager…" data-act="qSearch" data-k="managers" value="${esc(S.q.managers)}" style="width:100%;margin-bottom:6px"><div id="tbl-managers">${mgrTable()}</div>`;
+  if(id==='departments') return `<div class="info"><label class="used"><input type="checkbox"> Show deleted departments</label></div>
+      <input type="text" placeholder="Search departments or approvers…" data-act="qSearch" data-k="departments" value="${esc(S.q.departments)}" style="width:100%;margin-bottom:6px"><div id="tbl-departments">${deptTable()}</div>`;
+  if(id==='roles') return rolesHtml();
+  if(id==='costunits') return cuHtml();
+  if(id==='projects') return prHtml();
+  return '';
+}
+function count(id){return {orgchart:ORG_TREE.reduce((n,u)=>n+1+(u.kids?u.kids.length:0),0),managers:MANAGERS.length,departments:DEPTS.length,roles:ROLES_LIVE.length,costunits:CU.combos.length,projects:PR.rows.length}[id]}
+function renderLeft(){
+  const out=[],tiers={1:'1 · Foundations',2:'2 · Built on foundations'};let last=0;const na=[];
+  SECTIONS.forEach(s=>{
+    if(!avail(s.id)){na.push(s.title);return}
+    if(s.tier!==last){out.push(`<div class="tier">${tiers[s.tier]}</div>`);last=s.tier}
+    const open=S.open.has(s.id);
+    out.push(`<section class="sec ${open?'open':''} ${S.hlSec===s.id?'hl':''}" id="sec-${s.id}">
+      <button class="shead" data-act="sec" data-id="${s.id}" aria-expanded="${open}"><span class="chev">▸</span><span class="stitle">${s.title}</span><span class="cnt">${count(s.id)}</span><span class="tag ${s.src}">${SRC_LABEL[s.src]}</span></button>
+      <div class="sbody">${open?infoRow(s)+secBody(s.id):''}</div></section>`);
+  });
+  if(na.length)out.push(`<div class="na">Not used by this company:<br>${na.map(u=>`<span>${u}</span>`).join('')}</div>`);
+  out.push(`<div class="legend"><span class="mod">◐</span> marks definitions that modify others: <b>Exceptions</b> and <b>Deputy</b>. Substitutes are outside this view.</div>`);
+  const sc=$('#lscroll'),top=sc.scrollTop;sc.innerHTML=out.join('');sc.scrollTop=top;
+}
+
+/* ================= Right panel ================= */
+function renderRight(){
+  const docs=comp().docs;if(!docs.includes(S.doc))S.doc=docs[0];
+  const list=wfsOf(S.doc);
+  if(!S.sel||!list.find(w=>w.id===S.sel)){S.sel=(activeOf(S.doc)||list[0]||{}).id||null;S.draft=null;S.dirty=false}
+  const tabs=docs.map(d=>{const a=activeOf(d);return `<button class="rtab ${d===S.doc?'on':''}" data-act="doc" data-v="${d}" role="tab" aria-selected="${d===S.doc}" title="${a?'Active: '+esc(a.name):'No active workflow'}"><span class="dot ${a?'':'off'}"></span>${d}<small class="ro">${wfsOf(d).length}</small></button>`}).join('');
+  const rows=list.map(w=>`<div class="wfrow ${w.id===S.sel?'on':''} ${w.active?'isact':''}" data-act="pick" data-id="${w.id}"><span class="n" title="${esc(w.name)}">${esc(w.name)}</span>${w.active?'<span class="act">Active</span>':''}
+      <button class="btn sm ghost" data-act="wmenu" data-id="${w.id}" aria-label="Actions for ${esc(w.name)}" aria-haspopup="menu">⋯</button>
+      ${S.menu===w.id?`<div class="menu" role="menu"><button data-act="dup" data-id="${w.id}">Duplicate</button><button data-act="del" data-id="${w.id}">Delete</button></div>`:''}</div>`).join('');
+  $('#right').innerHTML=`<div class="phead"><h2>Workflows</h2></div><div class="rtop"><div class="dtlabel">Document type</div><div class="rtabs" role="tablist">${tabs}</div></div>
+   <div class="rbody"><div class="wflist">${rows}<div class="wfrow wfnew" data-act="newWf" ${list.length>=10?'style="opacity:.5"':''}>+ New workflow</div></div><div class="editor" id="editor"></div></div>`;
+  renderEditor();
+}
+const curWf=()=>S.draft||WF.find(w=>w.id===S.sel);
+function ruleOptions(sel){return Object.keys(RULE).filter(k=>{const n=RULE_NEEDS[k];return k===sel||!n||avail(n)}).map(k=>`<option value="${k}" ${k===sel?'selected':''}>${RULE[k]}</option>`).join('')}
+function roleSelect(r,si,ri){
+  const list=r.type==='orgrole'?ORG_ROLES:ROLES_LIVE;
+  const lbl=r.type==='orgrole'?'Organisation unit role':r.type==='projrole'?'Project unit role':'Cost unit role';
+  return sel(list,r.role,`data-act="role" data-s="${si}" data-r="${ri}" aria-label="${lbl}"`,`Select ${lbl.toLowerCase()}…`);
+}
+function renderEditor(){
+  const w=curWf(),el=$('#editor');
+  if(!w){el.innerHTML='<div class="empty-state">No workflow selected. Create one with “+ New workflow”.</div>';return}
+  el.innerHTML=`<div class="escroll"><div class="ehead"><input type="text" value="${esc(w.name)}" data-act="wname" aria-label="Workflow name">
+      <label style="display:flex;gap:8px;align-items:center"><button class="sw ${w.active?'on':''}" data-act="activate" data-id="${w.id}" role="switch" aria-checked="${w.active}" aria-label="Active"></button>${w.active?'<span class="act">Active</span>':'Inactive'}</label></div>
+    <div class="opts"><span>Document type: <b style="color:var(--text)">${w.doc}</b></span>
+      <label><input type="checkbox" data-act="initial" ${w.initial?'checked':''}> Allow editing by the initial approver</label>
+      <label title="Adds a fallback step at the end of the workflow"><input type="checkbox" data-act="four" ${w.fourEyes?'checked':''}> 4-eyes check</label></div>
+    <details class="sim"><summary>Simulator — simulating an incoming ${w.doc.replace(/s$/,'').toLowerCase()}</summary>
+      <div class="simgrid"><label>Submitter / Requester<input type="text"></label><label>Amount<input type="number"></label>
+      ${avail('costunits')?'<label>Cost units<input type="text"></label>':''}${avail('departments')?'<label>Departments<input type="text"></label>':''}${avail('projects')?'<label>Projects<input type="text"></label>':''}</div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" data-act="toast" data-m="Prototype: simulator is not wired up">Simulate workflow</button><button class="btn sm" data-act="toast" data-m="Prototype">Reset simulator</button></div></details>
+    ${w.steps.map((s,si)=>stepHtml(w,s,si)).join('')}
+    <button class="btn" data-act="addStep" ${w.steps.length>=8?'disabled':''}>+ Add new step</button></div>
+    <div class="savebar"><span class="ro">${S.dirty?'Unsaved changes':'No changes'}</span><button class="btn" data-act="cancel" ${S.dirty?'':'disabled'}>Cancel</button><button class="btn primary" data-act="save" ${S.dirty?'':'disabled'}>Save</button></div>`;
+}
+function stepHtml(w,s,si){
+  return `<div class="step"><div class="sh"><span class="ro">Step ${si+1}</span><input type="text" value="${esc(s.name)}" data-act="sname" data-s="${si}" aria-label="Step name">
+      <label style="display:flex;gap:5px;align-items:center"><input type="checkbox" data-act="scond" data-s="${si}" ${s.cond.on?'checked':''}> Step condition</label>
+      ${s.cond.on?sel(['Below the limit','Above the limit','Between the limits'],s.cond.mode,`data-act="smode" data-s="${si}"`)+sel(LIMITS,s.cond.limit,`data-act="slimit" data-s="${si}"`):''}
+      <span style="flex:1"></span><button class="btn sm ghost" data-act="up" data-s="${si}" title="Move up">↑</button><button class="btn sm ghost" data-act="down" data-s="${si}" title="Move down">↓</button>
+      <button class="btn sm ghost" data-act="delStep" data-s="${si}" title="Delete step" ${w.steps.length<2?'disabled':''}>🗑</button></div>
+    ${s.rules.map((r,ri)=>ruleHtml(w,s,r,si,ri)).join('')}
+    <div style="padding:0 10px 8px"><button class="btn sm" data-act="addRule" data-s="${si}">+ Add new rule</button></div>
+    <div class="sflags"><label><input type="checkbox" data-act="lines" data-s="${si}" ${s.lines?'checked':''}> Approve the lines</label>
+      <label><input type="checkbox" data-act="block" data-s="${si}" ${s.block?'checked':''}> Block the document when no approvers are found</label>
+      <label><input type="checkbox" data-act="aedit" data-s="${si}" ${s.allowEdit?'checked':''}> Allow editing and re-approve changes</label>
+      ${s.allowEdit?sel(['Always','Ask the approver','Never'],s.reapprove,`data-act="reap" data-s="${si}"`):''}</div></div>`;
+}
+function ruleHtml(w,s,r,si,ri){
+  const hl=S.hlRule&&S.hlRule.includes(r.type);let cfg='';
+  if(r.type==='list')cfg=`<div style="margin-top:8px">${r.approvers.map((a,i)=>`<span class="chip">${esc(a)}<button data-act="rmApp" data-s="${si}" data-r="${ri}" data-i="${i}" aria-label="Remove ${esc(a)}">×</button></span>`).join('')}<input type="text" placeholder="Add approver, Enter…" data-act="addApp" data-s="${si}" data-r="${ri}" style="width:170px"></div>
+     <label style="display:flex;gap:5px;align-items:center;margin-top:6px;color:var(--muted)"><input type="checkbox" data-act="auto" data-s="${si}" data-r="${ri}" ${r.auto?'checked':''}> Auto-approve on behalf of the first listed approver</label>
+     <div style="margin-top:6px;color:var(--muted)">Except for some employees: ${(r.exceptions||[]).map((e,i)=>`<span class="chip">${esc(e.req)} → ${esc(e.who)} <span class="mod">◐ Exception</span><button data-act="rmExc" data-s="${si}" data-r="${ri}" data-i="${i}">×</button></span>`).join('')||'<span class="ro">none</span>'}
+     <input type="text" placeholder="Requester → approver, Enter" data-act="addExc" data-s="${si}" data-r="${ri}" style="width:190px"></div>`;
+  const src=RULE_SRC[r.type];
+  const link=src&&avail(src)?`<button class="rsrc" data-act="goSec" data-id="${src}">↖ open ${SECTIONS.find(x=>x.id===src).title.split(' · ')[0]}</button>`:(r.type==='projmgr'?'<span class="ro">taken from the project system — no setup here</span>':'');
+  return `<div class="rule ${hl?'hl':''}"><div class="rline"><span class="lbl">Rule ${ri+1}: approve ${w.doc.toLowerCase()} by</span>
+      <select data-act="rtype" data-s="${si}" data-r="${ri}">${ruleOptions(r.type)}</select>${['costrole','projrole','orgrole'].includes(r.type)?roleSelect(r,si,ri):''}${link}<span style="flex:1"></span>
+      <label style="display:flex;gap:5px;align-items:center;color:var(--muted)"><input type="checkbox" data-act="amt" data-s="${si}" data-r="${ri}" ${r.amount?'checked':''}> Depends on amount limit</label>
+      <button class="btn sm ghost" data-act="delRule" data-s="${si}" data-r="${ri}" title="Delete rule" ${s.rules.length<2?'disabled':''}>🗑</button></div>${cfg}</div>`;
+}
+
+/* ================= Editing helpers ================= */
+const ensureDraft=()=>{if(!S.draft)S.draft=clone(WF.find(w=>w.id===S.sel));S.dirty=true};
+function commit(){const i=WF.findIndex(w=>w.id===S.sel),d=S.draft;if(i>-1&&d){d.active=WF[i].active;WF[i]=d}S.draft=null;S.dirty=false}
+function activate(id){
+  const w=WF.find(x=>x.id===id);if(!w)return;
+  if(w.active){w.active=false;toast(`“${w.name}” deactivated — ${w.doc} has no active workflow (prototype assumption)`)}
+  else{const prev=activeOf(w.doc);WF.filter(x=>x.doc===w.doc).forEach(x=>x.active=false);w.active=true;toast(prev?`“${w.name}” is now active; “${prev.name}” was deactivated`:`“${w.name}” is now active`)}
+  if(S.draft&&S.draft.id===id)S.draft.active=w.active;
+  renderRight();renderLeft();
+}
+
+/* ================= Events ================= */
+document.addEventListener('click',e=>{
+  if(S.pop&&!e.target.closest('.popwrap')){S.pop=null;renderLeft()}
+  if(S.menu!==null&&!e.target.closest('.menu')&&!(e.target.closest('[data-act=wmenu]'))){S.menu=null;renderRight()}
+  const t=e.target.closest('[data-act]');if(!t)return;const a=t.dataset.act,d=t.dataset,si=+d.s,ri=+d.r,i=+d.i,j=+d.j;
+  switch(a){
+  case 'sec':S.open.has(d.id)?S.open.delete(d.id):S.open.add(d.id);S.pop=null;persist();return renderLeft();
+  case 'expandAll':SECTIONS.filter(s=>avail(s.id)).forEach(s=>S.open.add(s.id));persist();return renderLeft();
+  case 'collapseAll':S.open.clear();S.pop=null;persist();return renderLeft();
+  case 'rail':return $('#split').classList.toggle('rail');
+  case 'mtab':S.mtab=d.v;return renderLeft();
+  case 'orgsel':S.orgSel=d.id;return renderLeft();
+  case 'orgtog':e.stopPropagation();S.orgOpen.has(d.id)?S.orgOpen.delete(d.id):S.orgOpen.add(d.id);return renderLeft();
+  case 'toast':return toast(d.m);
+  case 'pop':S.pop=S.pop===d.id?null:d.id;return renderLeft();
+  case 'popgo':{const w=WF.find(x=>x.id===+d.id);const s=SECTIONS.find(x=>x.id===d.sec);S.pop=null;S.doc=w.doc;S.sel=w.id;S.draft=null;S.dirty=false;S.hlRule=s.rules;renderRight();renderLeft();toast(`Opened “${w.name}” — rules using ${s.usedFor} are highlighted`);setTimeout(()=>{S.hlRule=null;renderEditor()},4000);return}
+  case 'goSec':S.open.add(d.id);S.hlSec=d.id;$('#split').classList.remove('rail');persist();renderLeft();{const el=$('#sec-'+d.id),sc=$('#lscroll');if(el)sc.scrollTo({top:sc.scrollTop+el.getBoundingClientRect().top-sc.getBoundingClientRect().top-8,behavior:'smooth'})}return setTimeout(()=>{S.hlSec=null;renderLeft()},1800);
+  case 'doc':S.doc=d.v;S.sel=null;S.draft=null;S.dirty=false;S.menu=null;return renderRight();
+  case 'pick':if(e.target.closest('[data-act=wmenu]'))return;if(S.dirty&&!confirm('Discard unsaved changes?'))return;S.sel=+d.id;S.draft=null;S.dirty=false;S.menu=null;return renderRight();
+  case 'wmenu':e.stopPropagation();S.menu=S.menu===+d.id?null:+d.id;return renderRight();
+  case 'activate':e.stopPropagation();return activate(+d.id);
+  case 'newWf':{if(wfsOf(S.doc).length>=10)return toast('Prototype limit: 10 workflows per document type');const w=mk('New '+S.doc.toLowerCase().replace(/s$/,'')+' workflow',S.doc,false,[ST('New Step',R('list'))]);WF.push(w);S.sel=w.id;S.draft=null;S.dirty=false;return renderRight()}
+  case 'dup':{const src=WF.find(x=>x.id===+d.id);const c=clone(src);c.id=wfId++;c.name=src.name+'-Copy';c.active=false;WF.push(c);S.sel=c.id;S.menu=null;S.draft=null;S.dirty=false;renderRight();return renderLeft()}
+  case 'del':{const w=WF.find(x=>x.id===+d.id);if(!confirm(`Delete “${w.name}”?`)){S.menu=null;return renderRight()}WF.splice(WF.indexOf(w),1);S.sel=null;S.menu=null;S.draft=null;S.dirty=false;renderRight();return renderLeft()}
+  case 'save':commit();renderRight();renderLeft();return toast('Saved (prototype, in memory only)');
+  case 'cancel':S.draft=null;S.dirty=false;return renderEditor();
+  /* cost units */
+  case 'cuMove':{const k=CU.selected.indexOf(d.t),n=k+ +d.d;if(n<0||n>=CU.selected.length)return;[CU.selected[k],CU.selected[n]]=[CU.selected[n],CU.selected[k]];return renderLeft()}
+  case 'cuDel':{if(CU.selected.length<2)return toast('At least one cost unit type is needed');if(!confirm(`Remove ${d.t}? Approvers assigned on this type are removed too.`))return;CU.selected=CU.selected.filter(x=>x!==d.t);CU.available.push(d.t);return renderLeft()}
+  case 'cuAdd':CU.available=CU.available.filter(x=>x!==d.t);CU.selected.push(d.t);return renderLeft();
+  case 'cmbNew':{const v={};CU.selected.forEach(t=>v[t]='Any');CU.combos.push({v,as:[]});return renderLeft()}
+  case 'cmbDel':CU.combos.splice(i,1);return renderLeft();
+  case 'asNew':CU.combos[i].as.push({role:ROLES_LIVE[0],who:'',dep:false,skip:false});return renderLeft();
+  case 'asDel':CU.combos[i].as.splice(j,1);return renderLeft();
+  case 'excAdd':{const r=$('#excReq').value.trim(),ro=$('#excRole').value,w=$('#excWho').value.trim();if(!r||!ro||!w)return toast('Fill requester, role and approver');CU.exc.push({req:r,role:ro,who:w});return renderLeft()}
+  case 'excDel':CU.exc.splice(i,1);return renderLeft();
+  /* projects */
+  case 'prNew':PR.draft={v:{},role:'',who:[]};return renderLeft();
+  case 'prCancel':PR.draft=null;return renderLeft();
+  case 'prSave':PR.rows.push(PR.draft);PR.draft=null;renderLeft();return toast('Row saved');
+  case 'prDel':PR.rows.splice(i,1);return renderLeft();
+  case 'prRm':(i<0?PR.draft:PR.rows[i]).who.splice(+d.k,1);return renderLeft();
+  /* roles / departments */
+  case 'roleAdd':{const v=$('#newRole').value.trim();if(!v||ROLES_LIVE.includes(v))return toast('Enter a new, unused role name');ROLES_LIVE.push(v);return renderLeft()}
+  case 'roleDel':{const n=roleUses(d.r,['costrole','projrole']);if(!confirm(n?`“${d.r}” is used in ${n} workflow(s). Delete it and its assignments and rules?`:`Delete “${d.r}”?`))return;ROLES_LIVE.splice(ROLES_LIVE.indexOf(d.r),1);return renderLeft()}
+  case 'dRm':DEPAPP[d.d].splice(i,1);return renderLeft();
+  }
+  const mut={
+    addStep:w=>w.steps.push(ST('New Step',R('list'))),delStep:w=>{if(w.steps.length>1)w.steps.splice(si,1)},
+    up:w=>{if(si>0)[w.steps[si-1],w.steps[si]]=[w.steps[si],w.steps[si-1]]},down:w=>{if(si<w.steps.length-1)[w.steps[si+1],w.steps[si]]=[w.steps[si],w.steps[si+1]]},
+    addRule:w=>w.steps[si].rules.push(R('list')),delRule:w=>{if(w.steps[si].rules.length>1)w.steps[si].rules.splice(ri,1)},
+    rmApp:w=>w.steps[si].rules[ri].approvers.splice(i,1),rmExc:w=>w.steps[si].rules[ri].exceptions.splice(i,1)};
+  if(mut[a]){ensureDraft();mut[a](S.draft);renderEditor()}
+});
+document.addEventListener('change',e=>{
+  const t=e.target.closest('[data-act]');if(!t)return;const d=t.dataset,a=d.act,si=+d.s,ri=+d.r,i=+d.i,j=+d.j,v=t.type==='checkbox'?t.checked:t.value;
+  const L_={
+    cmbVal:()=>{CU.combos[i].v[d.t]=v},asRole:()=>{CU.combos[i].as[j].role=v},
+    asSkip:()=>{const x=CU.combos[i].as[j];x.skip=v;if(v)x.who=''},asDep:()=>{CU.combos[i].as[j].dep=v},
+    prVal:()=>{(i<0?PR.draft:PR.rows[i]).v[d.t]=v},prRole:()=>{(i<0?PR.draft:PR.rows[i]).role=v},
+    orgF:()=>{S.orgF[d.k]=v}
+  };
+  if(L_[a]){L_[a]();return renderLeft()}
+  const m={initial:w=>w.initial=v,four:w=>w.fourEyes=v,scond:w=>w.steps[si].cond.on=v,smode:w=>w.steps[si].cond.mode=v,slimit:w=>w.steps[si].cond.limit=v,
+    lines:w=>w.steps[si].lines=v,block:w=>w.steps[si].block=v,aedit:w=>w.steps[si].allowEdit=v,reap:w=>w.steps[si].reapprove=v,
+    rtype:w=>{const r=w.steps[si].rules[ri];r.type=v;r.role='';r.approvers=[];r.auto=false;r.exceptions=[]},role:w=>w.steps[si].rules[ri].role=v,auto:w=>w.steps[si].rules[ri].auto=v,amt:w=>w.steps[si].rules[ri].amount=v};
+  if(m[a]){ensureDraft();m[a](S.draft);renderEditor()}
+});
+function markDirty(){const bar=document.querySelector('.savebar');if(bar){bar.querySelector('.ro').textContent='Unsaved changes';bar.querySelectorAll('button').forEach(b=>b.disabled=false)}}
+document.addEventListener('input',e=>{
+  const t=e.target,d=t.dataset;if(!d||!d.act)return;
+  if(d.act==='wname'){ensureDraft();S.draft.name=t.value;markDirty()}
+  if(d.act==='sname'){ensureDraft();S.draft.steps[+d.s].name=t.value;markDirty()}
+  if(d.act==='asWho'){CU.combos[+d.i].as[+d.j].who=t.value}
+  if(d.act==='orgQ'){S.orgF.q=t.value;$('#tbl-orgchart').innerHTML=orgTable()}
+  if(d.act==='qSearch'){S.q[d.k]=t.value;$('#tbl-'+d.k).innerHTML=d.k==='managers'?mgrTable():deptTable()}
+});
+document.addEventListener('keydown',e=>{
+  const t=e.target,d=t.dataset;if(!d||!d.act||e.key!=='Enter'||!t.value.trim())return;const v=t.value.trim();
+  if(d.act==='addApp'){ensureDraft();S.draft.steps[+d.s].rules[+d.r].approvers.push(v);renderEditor()}
+  if(d.act==='addExc'){const [r,w]=v.split('→').map(x=>x.trim());if(!r||!w)return toast('Use: Requester → approver');ensureDraft();S.draft.steps[+d.s].rules[+d.r].exceptions.push({req:r,who:w});renderEditor()}
+  if(d.act==='dAdd'){DEPAPP[d.d].push(v);renderLeft()}
+  if(d.act==='prAdd'){(+d.i<0?PR.draft:PR.rows[+d.i]).who.push(v);renderLeft()}
+});
+$('#company').addEventListener('change',e=>{S.company=e.target.value;S.sel=null;S.draft=null;S.dirty=false;S.pop=null;renderAll()});
+$('#burger').addEventListener('click',()=>$('#split').classList.toggle('rail'));
+(function(){
+  const g=$('#gutter'),sp=$('#split');
+  try{const w=localStorage.getItem('aw.lw2');if(w)sp.style.setProperty('--lw',w+'px')}catch(e){}
+  g.addEventListener('pointerdown',e=>{g.setPointerCapture(e.pointerId);g.classList.add('drag')});
+  g.addEventListener('pointermove',e=>{if(!g.classList.contains('drag'))return;const w=Math.min(680,Math.max(300,e.clientX));sp.style.setProperty('--lw',w+'px');try{localStorage.setItem('aw.lw2',w)}catch(_){}});
+  g.addEventListener('pointerup',()=>g.classList.remove('drag'));
+  g.addEventListener('keydown',e=>{if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;const cur=parseInt(getComputedStyle(sp).getPropertyValue('--lw'))||400;sp.style.setProperty('--lw',Math.min(680,Math.max(300,cur+(e.key==='ArrowRight'?24:-24)))+'px')});
+})();
+function renderAll(){renderLeft();renderRight()}
+$('#company').innerHTML=Object.keys(COMPANIES).map(c=>`<option>${c}</option>`).join('');
+renderAll();
+</script>
+</body>
+</html>
